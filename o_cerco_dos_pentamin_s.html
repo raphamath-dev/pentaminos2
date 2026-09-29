@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>O Cerco dos Pentaminós - Desafio dos 12 Pentaminós</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#090d16',
+                        cardbg: '#131c2e',
+                        boardbg: '#050811',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #090d16;
+            color: #f1f5f9;
+            overflow-x: hidden;
+        }
+
+        /* Locked / Blocked cell pattern */
+        .cell-locked {
+            background: radial-gradient(circle, #334155 0%, #0f172a 100%);
+            background-image: repeating-linear-gradient(45deg, rgba(239, 68, 68, 0.2) 0, rgba(239, 68, 68, 0.2) 8px, transparent 8px, transparent 16px);
+        }
+
+        /* Smooth cell hover & drop styles */
+        .board-cell {
+            transition: background-color 0.12s ease, border-color 0.12s ease;
+        }
+
+        .piece-block {
+            box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.5);
+            transition: transform 0.1s ease;
+        }
+
+        /* Floating Drag Ghost Element */
+        #drag-ghost {
+            position: fixed;
+            pointer-events: none;
+            z-index: 1000;
+            top: 0;
+            left: 0;
+            transform: translate(-50%, -50%);
+            display: none;
+            filter: drop-shadow(0 15px 25px rgba(0, 0, 0, 0.6));
+            opacity: 0.9;
+        }
+
+        /* Glassmorphism effects */
+        .glass-panel {
+            background: rgba(19, 28, 46, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Custom Scrollbar for level menu & trays */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090d16;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+
+        /* Confetti overlay */
+        #confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 999;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+    <!-- Confetti Overlay Canvas -->
+    <canvas id="confetti-canvas"></canvas>
+
+    <!-- Floating Pointer Drag Ghost Container -->
+    <div id="drag-ghost"></div>
+
+    <!-- Header Bar -->
+    <header class="glass-panel sticky top-0 z-40 px-3 sm:px-6 py-2.5 shadow-xl">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-2">
+            
+            <!-- Logo & Title -->
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <span class="text-lg">🧩</span>
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-extrabold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent leading-tight">
+                        O Cerco dos Pentaminós
+                    </h1>
+                    <p class="text-[10px] sm:text-xs text-slate-400 font-medium hidden sm:block">Desafio dos 12 Pentaminós - Preencha as 60 casas</p>
+                </div>
+            </div>
+
+            <!-- Header Controls -->
+            <div class="flex items-center space-x-1.5 sm:space-x-3">
+                <button onclick="openLevelSelectModal()" class="px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition active:scale-95">
+                    🗺️ <span class="hidden sm:inline">Níveis</span>
+                </button>
+
+                <button id="sound-toggle-btn" onclick="toggleSound()" class="p-2 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 hover:text-white transition" title="Alternar Som">
+                    <svg id="sound-on-icon" class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                    <svg id="sound-off-icon" class="w-4 h-4 sm:w-5 sm:h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path></svg>
+                </button>
+
+                <button onclick="openRulesModal()" class="p-2 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 hover:text-white transition" title="Instruções">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Container -->
+    <main class="max-w-7xl mx-auto w-full px-2 sm:px-4 py-3 flex-grow flex flex-col justify-start">
+        
+        <!-- Status Bar -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-3">
+            
+            <div class="glass-panel rounded-xl p-2.5 flex items-center justify-between shadow-sm">
+                <div>
+                    <div class="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase tracking-wider">Fase Atual</div>
+                    <div id="level-name-display" class="text-xs sm:text-sm font-bold text-indigo-400 truncate max-w-[120px] sm:max-w-none">Nível 1</div>
+                </div>
+                <div class="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 font-mono text-xs">
+                    N1
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-xl p-2.5 flex items-center justify-between shadow-sm">
+                <div>
+                    <div class="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase tracking-wider">Tempo</div>
+                    <div id="timer-display" class="text-xs sm:text-sm font-bold font-mono text-cyan-400">00:00</div>
+                </div>
+                <div class="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400">
+                    ⏱️
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-xl p-2.5 flex items-center justify-between shadow-sm">
+                <div>
+                    <div class="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase tracking-wider">Peças Posicionadas</div>
+                    <div id="pieces-count-display" class="text-xs sm:text-sm font-bold text-emerald-400">0 / 12</div>
+                </div>
+                <div class="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                    📦
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-xl p-2.5 flex items-center justify-between shadow-sm">
+                <div>
+                    <div class="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase tracking-wider">Melhor Tempo</div>
+                    <div id="best-time-display" class="text-xs sm:text-sm font-bold font-mono text-amber-400">--:--</div>
+                </div>
+                <div class="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                    🏆
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Layout Grid: Board Area vs Piece Tray -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+            
+            <!-- Board Container Column (Col 1 to 7/8) -->
+            <div class="lg:col-span-7 flex flex-col items-center">
+                <div class="glass-panel rounded-2xl p-3 sm:p-5 shadow-2xl w-full flex flex-col items-center">
+                    
+                    <!-- Dynamic Board Grid Element -->
+                    <div id="board-container" class="relative w-full flex justify-center items-center overflow-auto p-1">
+                        <div id="board-grid" class="grid gap-1 bg-boardbg p-2 rounded-xl border border-slate-800 shadow-2xl select-none touch-none">
+                            <!-- Cells dynamically standard-generated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Action Controls Bar under Board -->
+                    <div class="w-full mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3">
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="undoLastMove()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1 transition active:scale-95 shadow">
+                                ↩️ Desfazer
+                            </button>
+                            <button onclick="resetCurrentLevel()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1 transition active:scale-95 shadow">
+                                🔄 Reiniciar
+                            </button>
+                        </div>
+
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="giveHint()" class="px-2.5 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 text-xs font-semibold rounded-lg flex items-center gap-1 transition active:scale-95 shadow">
+                                💡 Dica
+                            </button>
+                            <button onclick="solveCurrentLevel()" class="px-2.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1 transition active:scale-95 shadow">
+                                ⚡ Resolver
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Controls & Pieces Tray Column (Col 8 to 12) -->
+            <div class="lg:col-span-5 flex flex-col gap-3">
+                
+                <!-- Floating Active Piece Action Box -->
+                <div class="glass-panel rounded-2xl p-3 shadow-xl flex flex-col items-center">
+                    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between w-full">
+                        <span>Controles de Peça</span>
+                        <span id="selected-piece-label" class="text-indigo-400 font-mono">Nenhuma</span>
+                    </div>
+
+                    <!-- Active Piece Preview Box -->
+                    <div id="active-piece-preview" class="w-28 h-28 bg-boardbg/90 border border-slate-800 rounded-xl flex items-center justify-center p-2 mb-2 shadow-inner">
+                        <span class="text-[11px] text-slate-500 text-center">Toque/Arraste uma peça para selecionar</span>
+                    </div>
+
+                    <!-- Rotation & Flip Action Buttons -->
+                    <div class="grid grid-cols-3 gap-1.5 w-full">
+                        <button onclick="rotateActivePiece(-1)" title="Girar -90° (R/Espaço)" class="py-2 px-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-xl text-xs font-bold text-slate-200 flex items-center justify-center gap-1 transition">
+                            🔄 -90°
+                        </button>
+                        <button onclick="rotateActivePiece(1)" title="Girar +90° (R/Espaço)" class="py-2 px-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1 shadow-md transition">
+                            🔄 +90°
+                        </button>
+                        <button onclick="flipActivePiece()" title="Inverter / Espelhar (Tecla F)" class="py-2 px-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-xl text-xs font-bold text-slate-200 flex items-center justify-center gap-1 transition">
+                            ↔️ Espelhar
+                        </button>
+                    </div>
+
+                    <!-- Teclado / Celular tips -->
+                    <div class="text-[10px] text-slate-400 mt-2 text-center hidden sm:block">
+                        💡 Dica: No celular, arraste com o dedo ou toque para colocar. Dobre o toque ou use a roda do mouse para girar!
+                    </div>
+                </div>
+
+                <!-- 12 Pentominoes Tray -->
+                <div class="glass-panel rounded-2xl p-3 shadow-xl">
+                    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex justify-between items-center">
+                        <span>Bandeja de Peças</span>
+                        <span id="tray-pieces-left-text" class="text-indigo-400">12 na reserva</span>
+                    </div>
+
+                    <!-- Tray Grid (12 items) -->
+                    <div id="pieces-tray" class="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto p-1">
+                        <!-- Rendered by JS -->
+                    </div>
+
+                    <div id="tray-drop-zone" class="mt-2 py-2 border-2 border-dashed border-slate-700/60 rounded-xl text-center text-xs text-slate-400 hover:border-indigo-500 transition">
+                        📥 Solte a peça aqui para devolvê-la à bandeja
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800/80 py-2.5 text-center text-[11px] text-slate-400 mt-4">
+        O Cerco dos Pentaminós &bull; 60 Casas Jogáveis &bull; Suporte Total a Celular e Mouse
+    </footer>
+
+    <!-- Level Selection Modal -->
+    <div id="level-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 hidden">
+        <div class="glass-panel border border-slate-700 rounded-2xl max-w-2xl w-full p-5 shadow-2xl relative max-h-[90vh] flex flex-col">
+            <button onclick="closeLevelSelectModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            
+            <h2 class="text-lg sm:text-xl font-bold text-white mb-1 flex items-center gap-2">
+                🗺️ Seleção de Fases e Desafios
+            </h2>
+            <p class="text-xs text-slate-400 mb-4">Escolha um nível para jogar. Todas as fases contêm exatamente 60 casas livres para encaixar os 12 Pentaminós!</p>
+
+            <!-- Level Cards Grid -->
+            <div id="levels-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto pr-1">
+                <!-- Rendered by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Victory Modal -->
+    <div id="victory-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl text-center relative">
+            <div class="w-16 h-16 bg-gradient-to-tr from-yellow-400 to-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/30 animate-bounce">
+                <span class="text-3xl">🏆</span>
+            </div>
+            <h2 class="text-2xl font-black text-white mb-1">Fase Concluída!</h2>
+            <p id="victory-subtitle" class="text-xs text-slate-300 mb-5">Você encaixou todas as 12 peças perfeitamente!</p>
+
+            <div class="bg-slate-900/90 rounded-xl p-4 border border-slate-800 mb-5 grid grid-cols-2 gap-3 text-left">
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Tempo da Rodada</div>
+                    <div id="victory-time-val" class="text-base font-bold font-mono text-cyan-400">00:00</div>
+                </div>
+                <div>
+                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Melhor Tempo</div>
+                    <div id="victory-best-val" class="text-base font-bold font-mono text-amber-400">00:00</div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button onclick="restartLevelFromModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition">
+                    🔄 Jogar Novamente
+                </button>
+                <button onclick="nextLevelFromModal()" class="flex-1 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl text-xs transition shadow-lg">
+                    Proxima Fase ➡️
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rules Modal -->
+    <div id="rules-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel border border-slate-700 rounded-2xl max-w-lg w-full p-5 shadow-2xl relative">
+            <button onclick="closeRulesModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <h2 class="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                🧩 Como Jogar
+            </h2>
+            <div class="space-y-3 text-xs text-slate-300 leading-relaxed">
+                <p><strong class="text-indigo-400">Objetivo:</strong> O objetivo de cada nível é encaixar exatamente as **12 peças de pentaminó** (totalizando 60 blocos) no tabuleiro sem sobreposição e sem cobrir os bloqueios.</p>
+                <p><strong class="text-indigo-400">Controles e Arrastar:</strong> Você pode arrastar as peças diretamente da bandeja para o tabuleiro, ou **mover peças já posicionadas no tabuleiro** para outra posição!</p>
+                <p><strong class="text-indigo-400">Toque & Celular:</strong> Se preferir, dê um toque na peça desejada e depois toque na casa do tabuleiro onde quer colocá-la.</p>
+                <p><strong class="text-indigo-400">Rotação:</strong> Use os botões no painel, a tecla <kbd class="px-1 py-0.5 bg-slate-800 rounded">R</kbd> ou <kbd class="px-1 py-0.5 bg-slate-800 rounded">Espaço</kbd>, ou a rodinha do mouse para girar a peça selecionada!</p>
+            </div>
+            <button onclick="closeRulesModal()" class="mt-5 w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 font-semibold text-white rounded-xl transition text-xs">
+                Entendido, Vamos Jogar!
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* Pentomino Definitions (12 pieces, 5 blocks each = 60 total blocks) */
+        const PENTOMINOES = {
+            'F': { name: 'F', color: '#ec4899', matrix: [[0,1,1],[1,1,0],[0,1,0]] },
+            'I': { name: 'I', color: '#3b82f6', matrix: [[1,1,1,1,1]] },
+            'L': { name: 'L', color: '#f97316', matrix: [[1,0],[1,0],[1,0],[1,1]] },
+            'N': { name: 'N', color: '#10b981', matrix: [[1,0],[1,0],[1,1],[0,1]] },
+            'P': { name: 'P', color: '#8b5cf6', matrix: [[1,1],[1,1],[1,0]] },
+            'T': { name: 'T', color: '#eab308', matrix: [[1,1,1],[0,1,0],[0,1,0]] },
+            'U': { name: 'U', color: '#06b6d4', matrix: [[1,0,1],[1,1,1]] },
+            'V': { name: 'V', color: '#ef4444', matrix: [[1,0,0],[1,0,0],[1,1,1]] },
+            'W': { name: 'W', color: '#84cc16', matrix: [[1,0,0],[1,1,0],[0,1,1]] },
+            'X': { name: 'X', color: '#a855f7', matrix: [[0,1,0],[1,1,1],[0,1,0]] },
+            'Y': { name: 'Y', color: '#f43f5e', matrix: [[1,0],[1,1],[1,0],[1,0]] },
+            'Z': { name: 'Z', color: '#14b8a6', matrix: [[1,1,0],[0,1,0],[0,1,1]] }
+        };
+
+        /* 7 Level Definitions - Each grid has exactly 60 playable unblocked cells */
+        const LEVELS = [
+            {
+                id: 1,
+                name: "O Cerco Clássico",
+                desc: "Grade 8x8 com os 4 quadrados centrais bloqueados.",
+                rows: 8,
+                cols: 8,
+                isBlocked: (r, c) => (r === 3 || r === 4) && (c === 3 || c === 4)
+            },
+            {
+                id: 2,
+                name: "Cantos Selados",
+                desc: "Grade 8x8 com os 4 cantos extremos bloqueados.",
+                rows: 8,
+                cols: 8,
+                isBlocked: (r, c) => (r === 0 && c === 0) || (r === 0 && c === 7) || (r === 7 && c === 0) || (r === 7 && c === 7)
+            },
+            {
+                id: 3,
+                name: "A Cruz de Espinhos",
+                desc: "Grade 8x8 com 4 bloqueios na diagonal interna.",
+                rows: 8,
+                cols: 8,
+                isBlocked: (r, c) => (r === 2 && c === 2) || (r === 2 && c === 5) || (r === 5 && c === 2) || (r === 5 && c === 5)
+            },
+            {
+                id: 4,
+                name: "Retângulo 6x10",
+                desc: "Tabuleiro retangular clássico de 6x10 sem obstáculos.",
+                rows: 6,
+                cols: 10,
+                isBlocked: () => false
+            },
+            {
+                id: 5,
+                name: "O Corredor 5x12",
+                desc: "Tabuleiro estreito de 5x12 sem obstáculos.",
+                rows: 5,
+                cols: 12,
+                isBlocked: () => false
+            },
+            {
+                id: 6,
+                name: "O Muro do Meio",
+                desc: "Grade 8x8 com bloqueio na linha média.",
+                rows: 8,
+                cols: 8,
+                isBlocked: (r, c) => (r === 3 && c === 2) || (r === 3 && c === 5) || (r === 4 && c === 2) || (r === 4 && c === 5)
+            },
+            {
+                id: 7,
+                name: "A Serpente 4x15",
+                desc: "Desafio extremo e longo de 4x15 sem obstáculos.",
+                rows: 4,
+                cols: 15,
+                isBlocked: () => false
+            }
+        ];
+
+        /* Web Audio API Sound Engine */
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) this.ctx = new AudioContext();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+            playTone(freq, type, duration, gainVal = 0.1) {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch (e) {}
+            }
+            playSelect() { this.playTone(480, 'sine', 0.08, 0.1); }
+            playRotate() { this.playTone(620, 'triangle', 0.09, 0.12); }
+            playPlace() { 
+                this.playTone(523.25, 'sine', 0.08, 0.12);
+                setTimeout(() => this.playTone(659.25, 'sine', 0.1, 0.12), 40);
+            }
+            playRemove() { this.playTone(350, 'sine', 0.08, 0.1); }
+            playError() { this.playTone(180, 'sawtooth', 0.2, 0.12); }
+            playVictory() {
+                if (!this.enabled) return;
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {
+                    setTimeout(() => this.playTone(freq, 'triangle', 0.2, 0.15), idx * 100);
+                });
+            }
+        }
+
+        const sound = new SoundEngine();
+        function toggleSound() {
+            sound.enabled = !sound.enabled;
+            document.getElementById('sound-on-icon').classList.toggle('hidden', !sound.enabled);
+            document.getElementById('sound-off-icon').classList.toggle('hidden', sound.enabled);
+        }
+
+        /* State Variables */
+        let currentLevelIdx = 0;
+        let boardState = []; // 2D array [rows][cols] storing pieceKey or 'BLOCKED' or null
+        let remainingPieces = Object.keys(PENTOMINOES);
+        let moveHistory = [];
+        
+        let activePieceKey = null;
+        let activePieceMatrix = null;
+        let activePieceColor = '#3b82f6';
+
+        // Dragging & Pointer state
+        let isDragging = false;
+        let dragPieceKey = null;
+        let dragMatrix = null;
+        let dragSource = null; // { type: 'tray' } or { type: 'board', r, c }
+        let hoveredRow = -1;
+        let hoveredCol = -1;
+
+        // Progress in localStorage
+        let savedProgress = {};
+
+        // Timer
+        let timerInterval = null;
+        let secondsElapsed = 0;
+        let isGameActive = true;
+
+        /* Matrix Manipulation Functions */
+        function rotateMatrixCW(m) {
+            const rows = m.length, cols = m[0].length;
+            const res = Array(cols).fill(null).map(() => Array(rows).fill(0));
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    res[c][rows - 1 - r] = m[r][c];
+                }
+            }
+            return res;
+        }
+
+        function rotateMatrixCCW(m) {
+            return rotateMatrixCW(rotateMatrixCW(rotateMatrixCW(m)));
+        }
+
+        function flipMatrixH(m) {
+            return m.map(row => [...row].reverse());
+        }
+
+        function getUniqueOrientations(matrix) {
+            const result = [];
+            const keys = new Set();
+            let curr = matrix;
+            for (let f = 0; f < 2; f++) {
+                for (let r = 0; r < 4; r++) {
+                    const str = JSON.stringify(curr);
+                    if (!keys.has(str)) {
+                        keys.add(str);
+                        result.push(curr);
+                    }
+                    curr = rotateMatrixCW(curr);
+                }
+                curr = flipMatrixH(matrix);
+            }
+            return result;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadProgress();
+            initLevel(0);
+            setupGlobalEventListeners();
+            startTimer();
+        });
+
+        function loadProgress() {
+            try {
+                const stored = localStorage.getItem('pentomino_cerco_progress');
+                if (stored) {
+                    savedProgress = JSON.parse(stored);
+                } else {
+                    savedProgress = { 1: { unlocked: true, bestTime: null } };
+                }
+            } catch (e) {
+                savedProgress = { 1: { unlocked: true, bestTime: null } };
+            }
+        }
+
+        function saveProgress() {
+            try {
+                localStorage.setItem('pentomino_cerco_progress', JSON.stringify(savedProgress));
+            } catch (e) {}
+        }
+
+        function initLevel(idx) {
+            currentLevelIdx = idx;
+            const level = LEVELS[idx];
+
+            document.getElementById('level-name-display').innerText = level.name;
+            document.getElementById('best-time-display').innerText = 
+                (savedProgress[level.id] && savedProgress[level.id].bestTime) ? 
+                formatTime(savedProgress[level.id].bestTime) : '--:--';
+
+            // Reset board array
+            boardState = Array(level.rows).fill(null).map((_, r) => 
+                Array(level.cols).fill(null).map((_, c) => 
+                    level.isBlocked(r, c) ? 'BLOCKED' : null
+                )
+            );
+
+            remainingPieces = Object.keys(PENTOMINOES);
+            moveHistory = [];
+            deselectPiece();
+
+            buildBoardGridUI();
+            renderPiecesTray();
+            renderBoard();
+            
+            secondsElapsed = 0;
+            isGameActive = true;
+        }
+
+        function buildBoardGridUI() {
+            const level = LEVELS[currentLevelIdx];
+            const boardGrid = document.getElementById('board-grid');
+            boardGrid.innerHTML = '';
+
+            boardGrid.style.gridTemplateColumns = `repeat(${level.cols}, minmax(0, 1fr))`;
+
+            // Calculate responsive cell sizing
+            const maxCellWidth = Math.min(48, Math.floor(320 / level.cols));
+            
+            for (let r = 0; r < level.rows; r++) {
+                for (let c = 0; c < level.cols; c++) {
+                    const cell = document.createElement('div');
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    cell.className = 'board-cell aspect-square rounded-md sm:rounded-lg border border-slate-800 flex items-center justify-center relative cursor-pointer overflow-hidden transition-all duration-100';
+                    cell.style.minWidth = `${maxCellWidth}px`;
+                    cell.style.minHeight = `${maxCellWidth}px`;
+
+                    if (boardState[r][c] === 'BLOCKED') {
+                        cell.classList.add('cell-locked', 'border-red-900/60');
+                        cell.innerHTML = `
+                            <svg class="w-3.5 h-3.5 text-red-500/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                        `;
+                    } else {
+                        cell.classList.add('bg-slate-900/90');
+                    }
+
+                    // Touch / Pointer Down to pick up placed piece OR drop active piece
+                    cell.addEventListener('pointerdown', (e) => onBoardCellPointerDown(e, r, c));
+
+                    boardGrid.appendChild(cell);
+                }
+            }
+        }
+
+        function renderBoard() {
+            const level = LEVELS[currentLevelIdx];
+
+            for (let r = 0; r < level.rows; r++) {
+                for (let c = 0; c < level.cols; c++) {
+                    if (boardState[r][c] === 'BLOCKED') continue;
+
+                    const cellEl = document.querySelector(`.board-cell[data-row="${r}"][data-col="${c}"]`);
+                    if (!cellEl) continue;
+
+                    const pKey = boardState[r][c];
+
+                    cellEl.style.backgroundColor = '';
+                    cellEl.style.borderColor = '';
+                    cellEl.classList.remove('piece-block');
+                    cellEl.innerHTML = '';
+
+                    if (pKey) {
+                        const color = PENTOMINOES[pKey].color;
+                        cellEl.style.backgroundColor = color;
+                        cellEl.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+                        cellEl.classList.add('piece-block');
+                        cellEl.innerHTML = `<span class="text-[10px] font-black text-white/80 select-none">${pKey}</span>`;
+                    }
+                }
+            }
+
+            // Draw drop preview if dragging or hovering with active selection
+            const activeMtx = isDragging ? dragMatrix : activePieceMatrix;
+            if (activeMtx && hoveredRow !== -1 && hoveredCol !== -1) {
+                drawPreview(hoveredRow, hoveredCol, activeMtx);
+            }
+
+            document.getElementById('pieces-count-display').innerText = `${12 - remainingPieces.length} / 12`;
+            document.getElementById('tray-pieces-left-text').innerText = `${remainingPieces.length} na reserva`;
+        }
+
+        function drawPreview(startR, startC, matrix) {
+            const level = LEVELS[currentLevelIdx];
+            const isValid = canPlacePiece(matrix, startR, startC);
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+
+            for (let pr = 0; pr < rows; pr++) {
+                for (let pc = 0; pc < cols; pc++) {
+                    if (matrix[pr][pc] === 1) {
+                        const r = startR + pr;
+                        const c = startC + pc;
+
+                        if (r >= 0 && r < level.rows && c >= 0 && c < level.cols) {
+                            const cellEl = document.querySelector(`.board-cell[data-row="${r}"][data-col="${c}"]`);
+                            if (cellEl && boardState[r][c] !== 'BLOCKED') {
+                                if (isValid) {
+                                    cellEl.style.backgroundColor = 'rgba(34, 197, 94, 0.55)'; // Emerald preview
+                                    cellEl.style.borderColor = '#22c55e';
+                                } else {
+                                    cellEl.style.backgroundColor = 'rgba(239, 68, 68, 0.55)'; // Red invalid preview
+                                    cellEl.style.borderColor = '#ef4444';
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function canPlacePiece(matrix, startR, startC) {
+            const level = LEVELS[currentLevelIdx];
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+
+            for (let pr = 0; pr < rows; pr++) {
+                for (let pc = 0; pc < cols; pc++) {
+                    if (matrix[pr][pc] === 1) {
+                        const r = startR + pr;
+                        const c = startC + pc;
+
+                        if (r < 0 || r >= level.rows || c < 0 || c >= level.cols) return false;
+                        if (boardState[r][c] === 'BLOCKED') return false;
+                        if (boardState[r][c] !== null) return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function placePieceOnBoard(pKey, matrix, startR, startC) {
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+            for (let pr = 0; pr < rows; pr++) {
+                for (let pc = 0; pc < cols; pc++) {
+                    if (matrix[pr][pc] === 1) {
+                        boardState[startR + pr][startC + pc] = pKey;
+                    }
+                }
+            }
+        }
+
+        function removePieceFromBoard(pKey) {
+            const level = LEVELS[currentLevelIdx];
+            for (let r = 0; r < level.rows; r++) {
+                for (let c = 0; c < level.cols; c++) {
+                    if (boardState[r][c] === pKey) {
+                        boardState[r][c] = null;
+                    }
+                }
+            }
+        }
+
+        function renderPiecesTray() {
+            const trayEl = document.getElementById('pieces-tray');
+            trayEl.innerHTML = '';
+
+            Object.keys(PENTOMINOES).forEach(key => {
+                const def = PENTOMINOES[key];
+                const isPlaced = !remainingPieces.includes(key);
+
+                const card = document.createElement('div');
+                card.dataset.key = key;
+                card.className = `piece-card bg-slate-900 border ${activePieceKey === key ? 'border-indigo-500 ring-2 ring-indigo-500/50' : 'border-slate-800'} rounded-xl p-1.5 flex flex-col items-center justify-between cursor-pointer transition select-none touch-none ${isPlaced ? 'opacity-25 cursor-not-allowed border-dashed' : 'hover:border-slate-600'}`;
+
+                if (!isPlaced) {
+                    card.addEventListener('pointerdown', (e) => onTrayPiecePointerDown(e, key));
+                }
+
+                const miniGrid = createMiniPieceGrid(def.matrix, def.color);
+                card.appendChild(miniGrid);
+
+                const label = document.createElement('div');
+                label.className = 'text-[10px] font-bold text-slate-300 mt-1';
+                label.innerText = key;
+                card.appendChild(label);
+
+                trayEl.appendChild(card);
+            });
+        }
+
+        function createMiniPieceGrid(matrix, color) {
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+            
+            const mini = document.createElement('div');
+            mini.className = 'grid gap-0.5 p-1 items-center justify-center';
+            mini.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const block = document.createElement('div');
+                    block.className = 'w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-xs';
+                    if (matrix[r][c] === 1) {
+                        block.style.backgroundColor = color;
+                        block.style.boxShadow = 'inset 0 1px 1px rgba(255,255,255,0.3)';
+                    } else {
+                        block.style.backgroundColor = 'transparent';
+                    }
+                    mini.appendChild(block);
+                }
+            }
+            return mini;
+        }
+
+        function setupGlobalEventListeners() {
+            // Pointer Move / Drag tracking
+            window.addEventListener('pointermove', onGlobalPointerMove);
+            window.addEventListener('pointerup', onGlobalPointerUp);
+            window.addEventListener('pointercancel', onGlobalPointerUp);
+
+            // Wheel rotate shortcut
+            window.addEventListener('wheel', (e) => {
+                if (activePieceKey) {
+                    rotateActivePiece(e.deltaY > 0 ? 1 : -1);
+                }
+            }, { passive: true });
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (!activePieceKey) return;
+                if (e.key === 'r' || e.key === 'R' || e.key === ' ') {
+                    rotateActivePiece(1);
+                } else if (e.key === 'f' || e.key === 'F') {
+                    flipActivePiece();
+                } else if (e.key === 'Escape') {
+                    deselectPiece();
+                }
+            });
+        }
+
+        function onTrayPiecePointerDown(e, key) {
+            if (!remainingPieces.includes(key)) return;
+            e.preventDefault();
+
+            selectPiece(key);
+
+            // Start dragging engine
+            isDragging = true;
+            dragPieceKey = key;
+            dragMatrix = activePieceMatrix;
+            dragSource = { type: 'tray' };
+
+            showDragGhost(e.clientX, e.clientY);
+        }
+
+        function onBoardCellPointerDown(e, r, c) {
+            e.preventDefault();
+            const level = LEVELS[currentLevelIdx];
+            if (boardState[r][c] === 'BLOCKED') return;
+
+            const existingPiece = boardState[r][c];
+
+            if (existingPiece) {
+                // Pick up piece already on board!
+                sound.playSelect();
+                removePieceFromBoard(existingPiece);
+
+                if (!remainingPieces.includes(existingPiece)) {
+                    remainingPieces.push(existingPiece);
+                }
+
+                selectPiece(existingPiece);
+
+                isDragging = true;
+                dragPieceKey = existingPiece;
+                dragMatrix = activePieceMatrix;
+                dragSource = { type: 'board', origR: r, origC: c };
+
+                renderPiecesTray();
+                renderBoard();
+                showDragGhost(e.clientX, e.clientY);
+            } else if (activePieceKey && activePieceMatrix) {
+                // Tap-to-place active piece on empty cell
+                attemptPlaceActivePieceAt(r, c);
+            }
+        }
+
+        function onGlobalPointerMove(e) {
+            if (isDragging) {
+                updateDragGhostPos(e.clientX, e.clientY);
+
+                // Determine element under pointer
+                const targetEl = document.elementFromPoint(e.clientX, e.clientY);
+                if (targetEl) {
+                    const cellEl = targetEl.closest('.board-cell');
+                    if (cellEl && cellEl.dataset.row !== undefined) {
+                        hoveredRow = parseInt(cellEl.dataset.row);
+                        hoveredCol = parseInt(cellEl.dataset.col);
+                    } else {
+                        hoveredRow = -1;
+                        hoveredCol = -1;
+                    }
+                }
+                renderBoard();
+            }
+        }
+
+        function onGlobalPointerUp(e) {
+            if (!isDragging) return;
+
+            isDragging = false;
+            hideDragGhost();
+
+            const targetEl = document.elementFromPoint(e.clientX, e.clientY);
+            let placed = false;
+
+            if (targetEl) {
+                const cellEl = targetEl.closest('.board-cell');
+                const trayZone = targetEl.closest('#tray-drop-zone') || targetEl.closest('#pieces-tray');
+
+                if (cellEl && cellEl.dataset.row !== undefined) {
+                    const r = parseInt(cellEl.dataset.row);
+                    const c = parseInt(cellEl.dataset.col);
+                    placed = attemptPlaceActivePieceAt(r, c);
+                } else if (trayZone) {
+                    // Piece returned to tray
+                    sound.playRemove();
+                    deselectPiece();
+                    placed = true;
+                }
+            }
+
+            if (!placed) {
+                // If drop invalid, revert or leave selected
+                sound.playError();
+            }
+
+            hoveredRow = -1;
+            hoveredCol = -1;
+            renderBoard();
+        }
+
+        function showDragGhost(x, y) {
+            const ghost = document.getElementById('drag-ghost');
+            ghost.style.display = 'block';
+            ghost.innerHTML = '';
+            const mini = createMiniPieceGrid(dragMatrix, PENTOMINOES[dragPieceKey].color);
+            mini.classList.add('scale-150');
+            ghost.appendChild(mini);
+            updateDragGhostPos(x, y);
+        }
+
+        function updateDragGhostPos(x, y) {
+            const ghost = document.getElementById('drag-ghost');
+            ghost.style.left = `${x}px`;
+            ghost.style.top = `${y}px`;
+        }
+
+        function hideDragGhost() {
+            document.getElementById('drag-ghost').style.display = 'none';
+        }
+
+        function attemptPlaceActivePieceAt(r, c) {
+            if (!activePieceKey || !activePieceMatrix) return false;
+
+            if (canPlacePiece(activePieceMatrix, r, c)) {
+                placePieceOnBoard(activePieceKey, activePieceMatrix, r, c);
+                sound.playPlace();
+
+                moveHistory.push({
+                    pKey: activePieceKey,
+                    r: r,
+                    c: c,
+                    matrix: activePieceMatrix
+                });
+
+                remainingPieces = remainingPieces.filter(p => p !== activePieceKey);
+                deselectPiece();
+
+                renderPiecesTray();
+                renderBoard();
+
+                checkWinCondition();
+                return true;
+            }
+            return false;
+        }
+
+        function selectPiece(key) {
+            if (!remainingPieces.includes(key)) return;
+            activePieceKey = key;
+            activePieceMatrix = PENTOMINOES[key].matrix;
+            activePieceColor = PENTOMINOES[key].color;
+
+            sound.playSelect();
+            updateActivePiecePreview();
+            renderPiecesTray();
+            renderBoard();
+        }
+
+        function deselectPiece() {
+            activePieceKey = null;
+            activePieceMatrix = null;
+            updateActivePiecePreview();
+            renderPiecesTray();
+            renderBoard();
+        }
+
+        function rotateActivePiece(dir = 1) {
+            if (!activePieceMatrix) return;
+            if (dir === 1) {
+                activePieceMatrix = rotateMatrixCW(activePieceMatrix);
+            } else {
+                activePieceMatrix = rotateMatrixCCW(activePieceMatrix);
+            }
+            if (isDragging) dragMatrix = activePieceMatrix;
+            sound.playRotate();
+            updateActivePiecePreview();
+            renderBoard();
+        }
+
+        function flipActivePiece() {
+            if (!activePieceMatrix) return;
+            activePieceMatrix = flipMatrixH(activePieceMatrix);
+            if (isDragging) dragMatrix = activePieceMatrix;
+            sound.playRotate();
+            updateActivePiecePreview();
+            renderBoard();
+        }
+
+        function updateActivePiecePreview() {
+            const previewContainer = document.getElementById('active-piece-preview');
+            const label = document.getElementById('selected-piece-label');
+
+            if (!activePieceKey || !activePieceMatrix) {
+                label.innerText = 'Nenhuma';
+                label.style.color = '#94a3b8';
+                previewContainer.innerHTML = `<span class="text-[11px] text-slate-500 text-center">Toque/Arraste uma peça para selecionar</span>`;
+                return;
+            }
+
+            label.innerText = `Peça ${activePieceKey}`;
+            label.style.color = activePieceColor;
+
+            previewContainer.innerHTML = '';
+            const mini = createMiniPieceGrid(activePieceMatrix, activePieceColor);
+            mini.classList.add('scale-125');
+            previewContainer.appendChild(mini);
+        }
+
+        function undoLastMove() {
+            if (moveHistory.length === 0) return;
+            const last = moveHistory.pop();
+
+            removePieceFromBoard(last.pKey);
+            if (!remainingPieces.includes(last.pKey)) {
+                remainingPieces.push(last.pKey);
+            }
+
+            sound.playSelect();
+            deselectPiece();
+            renderPiecesTray();
+            renderBoard();
+        }
+
+        function resetCurrentLevel() {
+            initLevel(currentLevelIdx);
+            sound.playSelect();
+        }
+
+        function findFirstEmptyCell(grid) {
+            const level = LEVELS[currentLevelIdx];
+            for (let r = 0; r < level.rows; r++) {
+                for (let c = 0; c < level.cols; c++) {
+                    if (grid[r][c] === null) return { r, c };
+                }
+            }
+            return null;
+        }
+
+        function solveBacktrack(grid, unusedPieces) {
+            const emptyCell = findFirstEmptyCell(grid);
+            if (!emptyCell) return true; // Solved!
+
+            const { r, c } = emptyCell;
+
+            for (let i = 0; i < unusedPieces.length; i++) {
+                const pKey = unusedPieces[i];
+                const orientations = getUniqueOrientations(PENTOMINOES[pKey].matrix);
+
+                for (const orient of orientations) {
+                    const rows = orient.length;
+                    const cols = orient[0].length;
+
+                    for (let pr = 0; pr < rows; pr++) {
+                        for (let pc = 0; pc < cols; pc++) {
+                            if (orient[pr][pc] === 1) {
+                                const startR = r - pr;
+                                const startC = c - pc;
+
+                                if (canPlaceOnGrid(grid, orient, startR, startC)) {
+                                    placeOnGrid(grid, pKey, orient, startR, startC);
+                                    const nextUnused = unusedPieces.filter(p => p !== pKey);
+
+                                    if (solveBacktrack(grid, nextUnused)) return true;
+
+                                    removeFromGrid(grid, pKey);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function canPlaceOnGrid(grid, matrix, startR, startC) {
+            const level = LEVELS[currentLevelIdx];
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+            for (let pr = 0; pr < rows; pr++) {
+                for (let pc = 0; pc < cols; pc++) {
+                    if (matrix[pr][pc] === 1) {
+                        const r = startR + pr;
+                        const c = startC + pc;
+                        if (r < 0 || r >= level.rows || c < 0 || c >= level.cols) return false;
+                        if (grid[r][c] !== null) return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function placeOnGrid(grid, pKey, matrix, startR, startC) {
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+            for (let pr = 0; pr < rows; pr++) {
+                for (let pc = 0; pc < cols; pc++) {
+                    if (matrix[pr][pc] === 1) {
+                        grid[startR + pr][startC + pc] = pKey;
+                    }
+                }
+            }
+        }
+
+        function removeFromGrid(grid, pKey) {
+            const level = LEVELS[currentLevelIdx];
+            for (let r = 0; r < level.rows; r++) {
+                for (let c = 0; c < level.cols; c++) {
+                    if (grid[r][c] === pKey) grid[r][c] = null;
+                }
+            }
+        }
+
+        function giveHint() {
+            const gridCopy = boardState.map(row => [...row]);
+            const unused = [...remainingPieces];
+
+            if (unused.length === 0) return;
+
+            const success = solveBacktrack(gridCopy, unused);
+
+            if (success) {
+                // Find 1 piece in gridCopy that is not in boardState
+                let hintPiece = unused[0];
+                selectPiece(hintPiece);
+                sound.playSelect();
+            } else {
+                alert("Nenhuma dica encontrada! A posição atual não tem solução. Tente desfazer uma jogada.");
+                sound.playError();
+            }
+        }
+
+        function solveCurrentLevel() {
+            const gridCopy = boardState.map(row => [...row]);
+            const unused = [...remainingPieces];
+
+            const success = solveBacktrack(gridCopy, unused);
+
+            if (success) {
+                boardState = gridCopy;
+                remainingPieces = [];
+                deselectPiece();
+                renderPiecesTray();
+                renderBoard();
+                checkWinCondition();
+            } else {
+                alert("Impossível resolver a partir desta configuração! Clique em Reiniciar.");
+                sound.playError();
+            }
+        }
+
+        function checkWinCondition() {
+            if (remainingPieces.length === 0) {
+                isGameActive = false;
+                sound.playVictory();
+                triggerConfetti();
+
+                const levelId = LEVELS[currentLevelIdx].id;
+                
+                // Save level unlock and best time
+                if (!savedProgress[levelId]) savedProgress[levelId] = { unlocked: true };
+                savedProgress[levelId].completed = true;
+
+                if (!savedProgress[levelId].bestTime || secondsElapsed < savedProgress[levelId].bestTime) {
+                    savedProgress[levelId].bestTime = secondsElapsed;
+                }
+
+                // Unlock next level
+                const nextId = levelId + 1;
+                if (nextId <= LEVELS.length) {
+                    if (!savedProgress[nextId]) savedProgress[nextId] = {};
+                    savedProgress[nextId].unlocked = true;
+                }
+
+                saveProgress();
+
+                document.getElementById('victory-time-val').innerText = formatTime(secondsElapsed);
+                document.getElementById('victory-best-val').innerText = formatTime(savedProgress[levelId].bestTime);
+                document.getElementById('victory-modal').classList.remove('hidden');
+            }
+        }
+
+        function openLevelSelectModal() {
+            renderLevelCards();
+            document.getElementById('level-modal').classList.remove('hidden');
+        }
+
+        function closeLevelSelectModal() {
+            document.getElementById('level-modal').classList.add('hidden');
+        }
+
+        function renderLevelCards() {
+            const container = document.getElementById('levels-grid');
+            container.innerHTML = '';
+
+            LEVELS.forEach((lvl, idx) => {
+                const prog = savedProgress[lvl.id] || {};
+                const isUnlocked = lvl.id === 1 || prog.unlocked;
+                const isCompleted = prog.completed;
+
+                const card = document.createElement('div');
+                card.className = `glass-panel rounded-xl p-3 border ${currentLevelIdx === idx ? 'border-indigo-500 ring-2 ring-indigo-500/40' : 'border-slate-800'} flex items-center justify-between transition ${isUnlocked ? 'hover:border-slate-600 cursor-pointer' : 'opacity-40 cursor-not-allowed'}`;
+
+                if (isUnlocked) {
+                    card.onclick = () => {
+                        initLevel(idx);
+                        closeLevelSelectModal();
+                    };
+                }
+
+                card.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 rounded-lg ${isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-300'} flex items-center justify-center font-bold text-sm">
+                            ${isUnlocked ? (isCompleted ? '✓' : lvl.id) : '🔒'}
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-white">${lvl.name}</div>
+                            <div class="text-[10px] text-slate-400">${lvl.desc}</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] font-mono font-bold text-amber-400">${prog.bestTime ? formatTime(prog.bestTime) : '--:--'}</div>
+                        <div class="text-[9px] text-slate-500">${lvl.rows}x${lvl.cols}</div>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            secondsElapsed = 0;
+            timerInterval = setInterval(() => {
+                if (isGameActive) {
+                    secondsElapsed++;
+                    document.getElementById('timer-display').innerText = formatTime(secondsElapsed);
+                }
+            }, 1000);
+        }
+
+        function formatTime(s) {
+            const m = Math.floor(s / 60).toString().padStart(2, '0');
+            const sec = (s % 60).toString().padStart(2, '0');
+            return `${m}:${sec}`;
+        }
+
+        function restartLevelFromModal() {
+            document.getElementById('victory-modal').classList.add('hidden');
+            initLevel(currentLevelIdx);
+        }
+
+        function nextLevelFromModal() {
+            document.getElementById('victory-modal').classList.add('hidden');
+            if (currentLevelIdx + 1 < LEVELS.length) {
+                initLevel(currentLevelIdx + 1);
+            } else {
+                openLevelSelectModal();
+            }
+        }
+
+        function openRulesModal() {
+            document.getElementById('rules-modal').classList.remove('hidden');
+        }
+
+        function closeRulesModal() {
+            document.getElementById('rules-modal').classList.add('hidden');
+        }
+
+        /* Confetti Effect */
+        function triggerConfetti() {
+            const canvas = document.getElementById('confetti-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+            const colors = ['#3b82f6', '#ec4899', '#f97316', '#10b981', '#8b5cf6', '#eab308'];
+
+            for (let i = 0; i < 100; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height - canvas.height,
+                    size: Math.random() * 8 + 4,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    vx: Math.random() * 4 - 2,
+                    vy: Math.random() * 5 + 3,
+                    rotation: Math.random() * 360,
+                    vRot: Math.random() * 10 - 5
+                });
+            }
+
+            let anim;
+            function render() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                let alive = false;
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.rotation += p.vRot;
+                    if (p.y < canvas.height) alive = true;
+
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate((p.rotation * Math.PI) / 180);
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                    ctx.restore();
+                });
+
+                if (alive) anim = requestAnimationFrame(render);
+                else ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            render();
+        }
+    </script>
+</body>
+</html>
